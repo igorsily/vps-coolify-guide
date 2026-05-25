@@ -7,7 +7,7 @@
 # 2. Opcionalmente ajuste hostname, usuário e timezone.
 # 3. Cole este conteúdo no campo Cloud config da Hetzner ao criar o servidor.
 
-hostname: coolify-vps
+hostname: atemporal-vps
 manage_etc_hosts: true
 timezone: America/Sao_Paulo
 locale: pt_BR.UTF-8
