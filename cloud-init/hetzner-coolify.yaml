@@ -1,0 +1,104 @@
+#cloud-config
+# Hetzner Cloud user-data para VPS Ubuntu + Coolify
+# Baseado no tutorial da Hetzner Basic Cloud Config e no runbook deste repositório.
+#
+# Antes de usar:
+# 1. Troque SUA_CHAVE_SSH_PUBLICA_AQUI pela sua chave pública SSH.
+# 2. Opcionalmente ajuste hostname, usuário e timezone.
+# 3. Cole este conteúdo no campo Cloud config da Hetzner ao criar o servidor.
+
+hostname: coolify-vps
+manage_etc_hosts: true
+timezone: America/Sao_Paulo
+locale: pt_BR.UTF-8
+
+users:
+  - default
+  - name: adminuser
+    gecos: Administrador
+    groups: users, admin, sudo, docker
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - SUA_CHAVE_SSH_PUBLICA_AQUI
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+  - ufw
+  - fail2ban
+  - htop
+  - vim
+  - jq
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-hardening.conf
+    owner: root:root
+    permissions: '0644'
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      PubkeyAuthentication yes
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      MaxAuthTries 3
+      X11Forwarding no
+      AllowUsers adminuser
+
+  - path: /etc/fail2ban/jail.local
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = %(sshd_log)s
+      maxretry = 5
+      bantime = 1h
+      findtime = 10m
+
+runcmd:
+  # Firewall base
+  - ufw default deny incoming
+  - ufw default allow outgoing
+
+  # SSH temporariamente público até autenticar Tailscale.
+  # Depois de validar a Tailnet, remova esta regra e mantenha SSH somente em tailscale0.
+  - ufw allow 22/tcp
+
+  # Coolify proxy público
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+
+  - ufw --force enable
+
+  # Fail2Ban
+  - systemctl enable fail2ban
+  - systemctl restart fail2ban
+
+  # Tailscale. A autenticação ainda precisa ser feita manualmente com: sudo tailscale up
+  - curl -fsSL https://tailscale.com/install.sh | sh
+
+  # Coolify
+  - curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+
+  # SSH hardening
+  - sshd -t
+  - systemctl restart ssh
+
+  # Docker group, caso Docker tenha sido instalado pelo Coolify
+  - usermod -aG docker adminuser || true
+
+final_message: |
+  Bootstrap concluído.
+  SSH: ssh adminuser@IP_DA_VPS
+  Depois execute:
+    sudo tailscale up
