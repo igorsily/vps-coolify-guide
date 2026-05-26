@@ -36,6 +36,8 @@ packages:
   - htop
   - vim
   - jq
+  - wget
+  - openssl
   - unattended-upgrades
 
 write_files:
@@ -87,12 +89,20 @@ runcmd:
   # Tailscale. A autenticação ainda precisa ser feita manualmente com: sudo tailscale up
   - curl -fsSL https://tailscale.com/install.sh | sh
 
-  # Coolify
-  - curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+  # Coolify com retry simples para reduzir falhas temporárias em pull de imagens.
+  - |
+      for attempt in 1 2 3; do
+        echo "Tentativa ${attempt}/3 de instalar Coolify"
+        if curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash; then
+          break
+        fi
+        echo "Instalação do Coolify falhou na tentativa ${attempt}. Tentando novamente em 20s..."
+        sleep 20
+      done
 
   # SSH hardening
   - sshd -t
-  - systemctl restart ssh
+  - systemctl restart ssh || systemctl restart ssh.service || true
 
   # Docker group, caso Docker tenha sido instalado pelo Coolify
   - usermod -aG docker adminuser || true
